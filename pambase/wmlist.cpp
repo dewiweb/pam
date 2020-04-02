@@ -27,13 +27,19 @@ BEGIN_EVENT_TABLE(wmList, pmControl)
     EVT_SET_FOCUS(wmList::OnFocus)
 END_EVENT_TABLE()
 
- wxIMPLEMENT_DYNAMIC_CLASS(wmList, pmControl);
-
-
+#ifdef WXSPAM
+IMPLEMENT_DYNAMIC_CLASS(wmList, pmControl)
+DEFINE_EVENT_TYPE(wxEVT_LIST_SELECTED)
+DEFINE_EVENT_TYPE(wxEVT_LIST_HELD)
+DEFINE_EVENT_TYPE(wxEVT_LIST_PAGED)
+DEFINE_EVENT_TYPE(wxEVT_LIST_SLID)
+#else
+wxIMPLEMENT_DYNAMIC_CLASS(wmList, pmControl);
 wxDEFINE_EVENT(wxEVT_LIST_SELECTED, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_LIST_HELD, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_LIST_PAGED, wxCommandEvent);
 wxDEFINE_EVENT(wxEVT_LIST_SLID, wxCommandEvent);
+#endif // WXSPAM
 
 wmList::wmList() : pmControl()
 {
@@ -72,6 +78,7 @@ bool wmList::Create(wxWindow* pParent, wxWindowID id, const wxPoint& pos, const 
 
     if(!wxWindow::Create(pParent,id,pos,szInit,wxWANTS_CHARS, wxEmptyString))
         return false;
+
 
 
     m_nGradient = wxEAST;
@@ -496,23 +503,23 @@ void wmList::CheckSliding(wxPoint pnt)
 
 void wmList::CreateSwipeBitmaps()
 {
-    m_bmpSwipe[0].SetWidth(GetClientSize().x);
-    m_bmpSwipe[0].SetHeight(GetClientSize().y);
-    m_bmpSwipe[1].SetWidth(GetClientSize().x);
-    m_bmpSwipe[1].SetHeight(GetClientSize().y);
+    #ifndef __WXGNU__
+    m_pbmpSwipe[0] = new wxBitmap(GetClientSize().x, GetClientSize().y, 32);
+    m_pbmpSwipe[1] = new wxBitmap(GetClientSize().x, GetClientSize().y, 32);
 
     //copy the current screen view in to the current bitmap
     wxMemoryDC memDC;
-    wxBitmap bmpTemp(GetClientRect().GetWidth(), GetClientRect().GetHeight());
-    memDC.SelectObject(bmpTemp);
+    //wxBitmap bmpTemp(GetClientRect().GetWidth(), GetClientRect().GetHeight(),24);
+    memDC.SelectObject(*m_pbmpSwipe[0]);
     Draw(memDC, m_itTop);
     memDC.SelectObject(wxNullBitmap);
-    m_bmpSwipe[0] = bmpTemp;
+    //m_bmpSwipe[0] = bmpTemp;
 
-    memDC.SelectObject(bmpTemp);
+    memDC.SelectObject(*m_pbmpSwipe[1]);
     Draw(memDC, (*m_itSwipe));
     memDC.SelectObject(wxNullBitmap);
-    m_bmpSwipe[1] = bmpTemp;
+    //m_bmpSwipe[1] = bmpTemp;
+    #endif
 }
 
 void wmList::CreateSlideBitmap()
@@ -664,18 +671,21 @@ bool wmList::ScrollHorizontal(int nXDiff)
 
 void wmList::DrawHorizontalScroll()
 {
+    #ifndef __WXGNU__
     wxClientDC dc(this);
     if(m_nSwipeLeft > 0)
     {
-        dc.DrawBitmap(m_bmpSwipe[1],m_nSwipeLeft-m_bmpSwipe[1].GetWidth(), 0);
+        dc.DrawBitmap(*m_pbmpSwipe[1],m_nSwipeLeft-m_pbmpSwipe[1]->GetWidth(), 0);
     }
     else
     {
-        dc.DrawBitmap(m_bmpSwipe[1],m_bmpSwipe[1].GetWidth()+m_nSwipeLeft, 0);
+        dc.DrawBitmap(*m_pbmpSwipe[1],m_pbmpSwipe[1]->GetWidth()+m_nSwipeLeft, 0);
     }
-    dc.DrawBitmap(m_bmpSwipe[0],m_nSwipeLeft, 0);
+    dc.DrawBitmap(*m_pbmpSwipe[0],m_nSwipeLeft, 0);
 
     dc.DestroyClippingRegion();
+
+    #endif
 }
 
 
@@ -1297,6 +1307,8 @@ void wmList::DeleteButtons(void* pData)
         if((*itButton)->pUi->GetClientData() == pData)
         {
             list<button*>::iterator itDelete(itButton);
+            list<button*>::iterator itDelete2(itButton);
+            list<button*>::iterator itDelete3(itButton);
             if(m_itTop == itButton)
             {
                 ++m_itTop;
@@ -1306,9 +1318,10 @@ void wmList::DeleteButtons(void* pData)
                 m_itDown = m_lstButtons.end();
             }
             ++itButton;
-            m_lstButtons.erase(itDelete);
             m_setitSelected.erase(itDelete);
-            m_setitFlash.erase(itDelete);
+            m_setitFlash.erase(itDelete2);
+			m_lstButtons.erase(itDelete3);
+
         }
         else
         {

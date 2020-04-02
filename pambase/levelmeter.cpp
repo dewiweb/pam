@@ -9,14 +9,36 @@
 using namespace std;
 
 // LevelMeter
+#ifdef WXSPAM
+IMPLEMENT_DYNAMIC_CLASS(LevelMeter, pmControl)
+#else
 wxIMPLEMENT_DYNAMIC_CLASS(LevelMeter, pmControl);
+#endif // WXSPAM
+
 //BEGIN_EVENT_TABLE(LevelMeter, wxWindow)
 //END_EVENT_TABLE()
 
 LevelMeter::LevelMeter() : pmControl()
     , m_dMin(-70)
     , m_dMax(0)
+	, m_nLightGap(0)
+	, m_bInit(false)
+	, m_dLastValue(-80.0)
+	, m_bLevelDisplay(false)
+	, m_dPeakValue(-80.0)
+	, m_dFall(-80.0)
+	, m_dPixelsPerdB(0.0)
+	, m_dPixelsPerPPM(0.0)
+	, m_nMeterDisplay(0)
+	, m_nPeakMode(0)
+	, m_bFreeze(false)
+	, m_nPeakCounter(0)
+	, m_nMeterMSMode(0)
+	, m_nMeterSpeed(0)
     , m_bShading(true)
+	, m_dLevelOffset(0.0)
+	, m_dScalingFactor(0.0)
+	, m_nChannels(2)
 {
     //create our font
     Connect(wxEVT_PAINT, (wxObjectEventFunction)&LevelMeter::OnPaint);
@@ -26,6 +48,24 @@ LevelMeter::LevelMeter() : pmControl()
 
 LevelMeter::LevelMeter(wxWindow *parent, wxWindowID id, const wxString & sText,double dMin, bool bLevelDisplay, const wxPoint& pos, const wxSize& size) : pmControl(),
     m_dMax(0)
+	, m_nLightGap(0)
+	, m_bInit(false)
+	, m_dLastValue(-80.0)
+	, m_bLevelDisplay(false)
+	, m_dPeakValue(-80.0)
+	, m_dFall(-80.0)
+	, m_dPixelsPerdB(0.0)
+	, m_dPixelsPerPPM(0.0)
+	, m_nMeterDisplay(0)
+	, m_nPeakMode(0)
+	, m_bFreeze(false)
+	, m_nPeakCounter(0)
+	, m_nMeterMSMode(0)
+	, m_nMeterSpeed(0)
+    , m_bShading(true)
+	, m_dLevelOffset(0.0)
+	, m_dScalingFactor(0.0)
+	, m_nChannels(2)
 {
     m_dLastValue = -180;
     wxSize szInit(size);
@@ -87,12 +127,11 @@ void LevelMeter::OnPaint(wxPaintEvent& event)
         {
             m_uiPeak.Draw(dc,uiRect::BORDER_FLAT);
         }
-        dc.SetPen(wxPen(wxColour(200,200,200),1, wxDOT));
+        dc.SetPen(wxPen(wxColour(120,120,120),1));
 
-
-        for(size_t i = 0; i < m_vLevels.size(); i++)
+        for(size_t i = 0; i < m_vLevels.size(); ++i)
         {
-            dc.DrawLine(0, m_uiLevelText.GetBottom()-(m_dPixelsPerdB*(m_vLevels[i])), GetClientRect().GetWidth(), m_uiLevelText.GetBottom()-(m_dPixelsPerdB*(m_vLevels[i])));
+            dc.DrawLine(0, m_uiLevelText.GetBottom()-static_cast<int>(m_dPixelsPerdB*(m_vLevels[i])), GetClientRect().GetWidth(), m_uiLevelText.GetBottom()-static_cast<int>(m_dPixelsPerdB*(m_vLevels[i])));
         }
 
         dc.SetPen(wxNullPen);
@@ -107,7 +146,7 @@ void LevelMeter::OnPaint(wxPaintEvent& event)
             int nY(m_uiLevelText.GetBottom()-(m_dPixelsPerdB*(m_vLevels[i])));
 
 
-            dc.SetPen(wxPen(wxColour(160,160,160),1, wxDOT));
+            dc.SetPen(wxPen(wxColour(160,160,160),1));
             dc.DrawLine(0, m_uiLevelText.GetBottom()-(m_dPixelsPerdB*(m_vLevels[i])), GetClientRect().GetWidth(), m_uiLevelText.GetBottom()-(m_dPixelsPerdB*(m_vLevels[i])));
             uiRect uiLevel(wxRect(10, nY-10,GetClientSize().x-25, 20));
             uiLevel.SetBackgroundColour(*wxBLACK);
@@ -157,7 +196,7 @@ void LevelMeter::InitMeter(const wxString& sText,double dMin)
 
     //draw to the bmp..
     wxMemoryDC dc;
-    m_bmpMeter = wxBitmap(GetClientSize().x, GetClientSize().y-m_uiLevelText.GetHeight()-m_uiLabel.GetHeight());
+    m_bmpMeter = wxBitmap(GetClientSize().x, GetClientSize().y-m_uiLevelText.GetHeight()-m_uiLabel.GetHeight(), 24);
     dc.SelectObject(m_bmpMeter);
     if(m_bShading)
     {

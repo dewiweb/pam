@@ -156,6 +156,30 @@ bool Settings::RemoveSection(const wxString& sSection)
 }
 
 
+void Settings::ResetFile()
+{
+    m_iniManager.RemoveAllSections();
+    m_iniManager.SetSectionValue("Discovery", "RTSP","1");
+    m_iniManager.SetSectionValue("Discovery", "SAP","0");
+    m_iniManager.SetSectionValue("General", "ShowOptions","0");
+    m_iniManager.SetSectionValue("Generator", "Shape","0");
+    m_iniManager.SetSectionValue("Input", "Device","0");
+    m_iniManager.SetSectionValue("Input", "Reset","0");
+    m_iniManager.SetSectionValue("Input", "Type","Disabled");
+    m_iniManager.SetSectionValue("Main", "Monitor","Settings");
+    m_iniManager.SetSectionValue("Noise", "Colour","0");
+    m_iniManager.SetSectionValue("Output", "Destination", "Disabled");
+    m_iniManager.SetSectionValue("Output", "Device","3");
+    m_iniManager.SetSectionValue("Output", "Left", "0");
+    m_iniManager.SetSectionValue("Output", "Right", "0");
+    m_iniManager.SetSectionValue("Output", "Source", "Input");
+    m_iniManager.SetSectionValue("Settings", "_Options", "0");
+    m_iniManager.SetSectionValue("Update", "Type", "USB");
+
+    m_iniManager.WriteIniFile(m_sFullPath);
+
+}
+
 wxString Settings::GetExecutableDirectory() const
 {
     #ifdef __WXGNU__
@@ -197,6 +221,7 @@ wxString Settings::GetCoreLibDirectory() const
      #ifdef __WXGNU__
     return m_iniManager.GetIniString(wxT("Paths"), wxT("Core"), wxT("/usr/local/lib/pam2"));
     #else
+
     return m_iniManager.GetIniString(wxT("Paths"), wxT("Core"),  wxString::Format(wxT("%s/lib"), GetExecutableDirectory().c_str()));
     #endif // __WXGNU__
 }
@@ -271,7 +296,7 @@ multimap<wxString, wxString> Settings::GetInterfaces() const
 
     #ifdef __WXMSW__
 
-    DWORD dwSize = 0;
+    //DWORD dwSize = 0;
     unsigned int i = 0;
     // Set the flags to pass to GetAdaptersAddresses
     // default to unspecified address family (both)
@@ -318,7 +343,7 @@ multimap<wxString, wxString> Settings::GetInterfaces() const
                     {
                         if (pUnicast->Address.lpSockaddr->sa_family == AF_INET)
                         {
-                            char buff[100];
+                            //char buff[100];
                             sockaddr_in *sa_in = (sockaddr_in *)pUnicast->Address.lpSockaddr;
                             mmInterfaces.insert(make_pair(wxString::FromAscii(pCurrAddresses->AdapterName), wxString::FromAscii(inet_ntoa(sa_in->sin_addr))));
                         }

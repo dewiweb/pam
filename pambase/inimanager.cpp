@@ -42,7 +42,7 @@ void iniManager::DeleteSections()
 	while(it != m_mSections.end())
 	{
 		delete it->second;
-		it++;
+		++it;
 	}
 	m_mSections.clear();
 }
@@ -233,6 +233,15 @@ void iniManager::RemoveSection(const wxString& sSectionName)
         delete itSection->second;
         m_mSections.erase(itSection);
     }
+}
+
+void iniManager::RemoveAllSections()
+{
+    for(auto itSection : m_mSections)
+    {
+        delete itSection.second;
+    }
+    m_mSections.clear();
 }
 
 size_t iniManager::GetNumberOfSectionEntries(const wxString& sSectionName)

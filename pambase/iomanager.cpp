@@ -10,6 +10,8 @@
 #include <wx/log.h>
 #include "rtpserverthread.h"
 #include <ctime>
+#include "wxptp.h"
+#include "aoipsourcemanager.h"
 
 using namespace std;
 
@@ -54,6 +56,7 @@ IOManager::IOManager() :
 
 {
 
+    AoipSourceManager::Get();
     Settings::Get().Write(wxT("Server"), wxT("Stream"), 0); //can't be streaming at startup so set to 0 in case we exited whilst streaming
 
     Settings::Get().AddHandler(wxT("Input"),wxT("Type"), this);
@@ -91,6 +94,13 @@ IOManager::IOManager() :
 
     Connect(wxID_ANY,wxEVT_QOS_UPDATED,(wxObjectEventFunction)&IOManager::OnQoS);
 
+    #ifdef PTPMONKEY
+    wxPtp::Get().AddHandler(this);
+    Connect(wxID_ANY, wxEVT_CLOCK_MASTER, (wxObjectEventFunction)&IOManager::OnPtpEvent);
+    Connect(wxID_ANY, wxEVT_CLOCK_SLAVE, (wxObjectEventFunction)&IOManager::OnPtpEvent);
+    wxPtp::Get().RunDomain(std::string(Settings::Get().Read(wxT("AoIP_Settings"), wxT("Interface"), wxT("eth0")).mb_str()),
+    Settings::Get().Read(wxT("AoIP_Settings"), wxT("Domain"), 0));
+    #endif // PTPMONKEY
     m_pGenerator = new Generator();
     m_pGenerator->SetSampleRate(48000);
 
@@ -113,7 +123,7 @@ void IOManager::Stop()
     delete m_pGenerator;
     m_pGenerator = 0;
 
-    for(map<wxString, RtpThread*>::iterator itThread = m_mRtp.begin(); itThread != m_mRtp.end(); ++itThread)
+    for(map<unsigned int, RtpThread*>::iterator itThread = m_mRtp.begin(); itThread != m_mRtp.end(); ++itThread)
     {
         bool bDelete = m_setRtpOrphan.insert(itThread->first).second;
         if(bDelete)
@@ -169,7 +179,7 @@ void IOManager::OnSettingEvent(SettingEvent& event)
     {
         if(event.GetKey() == wxT("Interval"))
         {
-            map<wxString, RtpThread*>::iterator itThread = m_mRtp.find(m_sCurrentRtp);
+            map<unsigned int, RtpThread*>::iterator itThread = m_mRtp.find(m_nCurrentRtp);
             if(itThread != m_mRtp.end())
             {
                 itThread->second->SetQosMeasurementIntervalMS(Settings::Get().Read(wxT("QoS"), wxT("Interval"), 1000));
@@ -221,28 +231,7 @@ void IOManager::OnAudioEvent(AudioEvent& event)
         }
         if(m_nPlaybackSource != m_nInputSource)
         {
-            //wxLogDebug(wxT("Generate %d"),event.GetBuffer()->GetBufferSize());
-            if(m_pGenerator)
-            {
-                timedbuffer* pBuffer(m_pGenerator->Generate(event.GetBuffer()->GetBufferSize()));
-                switch(m_nOutputDestination)
-                {
-                    case AudioEvent::SOUNDCARD:
-                      //  wxLogDebug(wxT("SOUNDCARD %d"), pBuffer->GetBufferSize());
-                        SoundcardManager::Get().AddOutputSamples(pBuffer);
-                        break;
-                    case AudioEvent::RTP:
-                     //   wxLogDebug(wxT("RTP %d"), pBuffer->GetBufferSize());
-                        if(m_pRtpServer)
-                        {
-                            m_pRtpServer->AddSamples(pBuffer);
-                        }
-                        break;
-                    default:
-                        wxLogDebug(wxT("Output=%d"), m_nOutputDestination);
-                }
-                delete pBuffer;
-            }
+            AddOutputSamples(event.GetBuffer()->GetBufferSize());
         }
     }
 
@@ -255,6 +244,29 @@ void IOManager::OnAudioEvent(AudioEvent& event)
 
 
     delete event.GetBuffer();
+}
+
+void IOManager::AddOutputSamples(size_t nSize)
+{
+    if(m_pGenerator)
+    {
+        timedbuffer* pBuffer(m_pGenerator->Generate(nSize));
+        switch(m_nOutputDestination)
+        {
+            case AudioEvent::SOUNDCARD:
+                SoundcardManager::Get().AddOutputSamples(pBuffer);
+                break;
+            case AudioEvent::RTP:
+                if(m_pRtpServer)
+                {
+                    m_pRtpServer->AddSamples(pBuffer);
+                }
+                break;
+            default:
+                wxLogDebug(wxT("Output=%d"), m_nOutputDestination);
+        }
+        delete pBuffer;
+    }
 }
 
 void IOManager::PassOnAudio(AudioEvent& event)
@@ -274,14 +286,13 @@ void IOManager::InputChanged(const wxString& sKey)
     if(sKey == wxT("AoIP"))
     {
         wmLog::Get()->Log(wxT("IOManager::InputChanged: AoIP"));
+        AoIPSource source = AoipSourceManager::Get().FindSource(Settings::Get().Read(wxT("Input"), wxT("AoIP"), 0));
 
-        wxString sUrl = Settings::Get().Read(wxT("AoIP"), Settings::Get().Read(wxT("Input"), wxT("AoIP"), wxEmptyString), wxEmptyString);
-        wxLogDebug(wxT("IOManager::InputChanged: Url = %s"), sUrl.c_str());
-        if(sUrl != m_sCurrentRtp)
+        if(source.nIndex != m_nCurrentRtp)
         {
             wmLog::Get()->Log(wxT("Audio Input Device Changed: Close AoIP Session"));
             ClearSession();
-            map<wxString, RtpThread*>::iterator itThread = m_mRtp.find(m_sCurrentRtp);
+            map<unsigned int, RtpThread*>::iterator itThread = m_mRtp.find(m_nCurrentRtp);
             if(itThread != m_mRtp.end())
             {
                 bool bDelete = m_setRtpOrphan.insert(itThread->first).second;
@@ -309,7 +320,7 @@ void IOManager::InputTypeChanged()
             OpenSoundcardDevice(SoundcardManager::Get().GetOutputSampleRate());    //this will remove the input stream
             break;
         case AudioEvent::RTP:
-            map<wxString, RtpThread*>::iterator itThread = m_mRtp.find(m_sCurrentRtp);
+            map<unsigned int, RtpThread*>::iterator itThread = m_mRtp.find(m_nCurrentRtp);
             if(itThread != m_mRtp.end())
             {
                 wmLog::Get()->Log(wxT("Audio Input Device Changed: Close AoIP"));
@@ -401,12 +412,14 @@ void IOManager::OutputChanged(const wxString& sKey)
             m_nPlaybackSource = m_nInputSource;
             m_bPlaybackInput = true;
             m_pGenerator->Stop();
+            return;     //rturn here as we dont want to genareate sampless
         }
         else
         {   //plugin
             m_nPlaybackSource = AudioEvent::GENERATOR;
             InitGeneratorPlugin(sType);
         }
+        AddOutputSamples(8192);
     }
     else if(sKey == wxT("Device"))
     {
@@ -560,7 +573,7 @@ void IOManager::InitGeneratorNoise()
 
 void IOManager::OpenSoundcardDevice(unsigned long nOutputSampleRate)
 {
-    wmLog::Get()->Log(wxT("Opene Audio Device: Soundcard"));
+    wmLog::Get()->Log(wxT("Open Audio Device: Soundcard"));
 
     int nInput(-1);
     if(Settings::Get().Read(wxT("Input"), wxT("Type"), wxT("Soundcard")) == wxT("Soundcard"))
@@ -616,20 +629,18 @@ void IOManager::InitAudioInputDevice()
         wxLogDebug(wxT("IOManager::InitAudioInputDevice: AoIP"));
         m_nInputSource = AudioEvent::RTP;
         wmLog::Get()->Log(wxT("Create Audio Input Device: AoIP"));
-        wxString sRtp(Settings::Get().Read(wxT("Input"), wxT("AoIP"), wxEmptyString));
-        sRtp = Settings::Get().Read(wxT("AoIP"), sRtp, wxEmptyString);
 
-        if(sRtp.empty() == false && m_mRtp.find(sRtp) == m_mRtp.end())
+        AoIPSource source = AoipSourceManager::Get().FindSource(Settings::Get().Read(wxT("Input"), wxT("AoIP"), 0));
+        if(source.nIndex != 0 && m_mRtp.find(source.nIndex) == m_mRtp.end())
         {
-
-            m_sCurrentRtp = sRtp;
-            RtpThread* pThread = new RtpThread(this, Settings::Get().Read(wxT("AoIP"), wxT("Interface"), wxEmptyString), wxT("pam"), sRtp, 2048);
+            m_nCurrentRtp = source.nIndex;
+            RtpThread* pThread = new RtpThread(this, Settings::Get().Read(wxT("AoIP_Settings"), wxT("Interface"), "eth0"), wxT("pam"), source, 2048);
             pThread->Create();
             pThread->Run();
 
             pThread->SetQosMeasurementIntervalMS(Settings::Get().Read(wxT("QoS"), wxT("Interval"), 1000));
 
-            m_mRtp.insert(make_pair(m_sCurrentRtp, pThread));
+            m_mRtp.insert(make_pair(m_nCurrentRtp, pThread));
         }
     }
     else if(sType == wxT("Output"))
@@ -727,15 +738,14 @@ void IOManager::SessionChanged()
 
 void IOManager::OnRTPSessionClosed(wxCommandEvent& event)
 {
-    wxString sTest = event.GetString();
-    sTest.Replace(wxT("%20"), wxT(" "));
 
-    if(m_sCurrentRtp == sTest)
+
+    if(m_nCurrentRtp == event.GetInt())
     {
-        m_sCurrentRtp = wxEmptyString;
+        m_nCurrentRtp = 0;
     }
-    m_setRtpOrphan.erase(sTest);
-    m_mRtp.erase(sTest);
+    m_setRtpOrphan.erase(event.GetInt());
+    m_mRtp.erase(event.GetInt());
 
 }
 
@@ -767,7 +777,8 @@ void IOManager::CheckPlayback(unsigned long nSampleRate, unsigned long nChannels
     if(m_nPlaybackSource == AudioEvent::RTP || m_nPlaybackSource == AudioEvent::SOUNDCARD)
     {
         //check the stream details against the playing details...
-        if(SoundcardManager::Get().IsOutputStreamOpen() && (SoundcardManager::Get().GetOutputSampleRate() != nSampleRate || SoundcardManager::Get().GetOutputNumberOfChannels() != nChannels))
+        if(SoundcardManager::Get().IsOutputStreamOpen() && (SoundcardManager::Get().GetOutputSampleRate() != nSampleRate ||
+                                                            SoundcardManager::Get().GetOutputNumberOfChannels() != nChannels))
         {
             OutputChannelsChanged();
             OpenSoundcardDevice(nSampleRate);
@@ -835,11 +846,11 @@ void IOManager::OutputChannelsChanged()
 
 void IOManager::OnQoS(wxCommandEvent& event)
 {
-    for(set<wxEvtHandler*>::iterator itHandler = m_setHandlers.begin(); itHandler != m_setHandlers.end(); ++itHandler)
+    for(auto pHandler : m_setHandlers)
     {
         wxCommandEvent eventUp(wxEVT_QOS_UPDATED);
         eventUp.SetClientData(event.GetClientData());
-        (*itHandler)->ProcessEvent(eventUp);
+        pHandler->ProcessEvent(eventUp);
     }
 }
 
@@ -848,9 +859,9 @@ void IOManager::OnTimerSilence(wxTimerEvent& event)
 {
     wxCommandEvent eventInput(wxEVT_INPUT_FAILED);
 
-    for(set<wxEvtHandler*>::iterator itHandler = m_setHandlers.begin(); itHandler != m_setHandlers.end(); ++itHandler)
+    for(auto pHandler : m_setHandlers)
     {
-        (*itHandler)->ProcessEvent(eventInput);
+        pHandler->ProcessEvent(eventInput);
     }
 }
 
@@ -864,4 +875,14 @@ wxString IOManager::GetRandomMulticastAddress()
         sAddress += wxString::Format(wxT(".%d"), rand()%256);
     }
     return sAddress;
+}
+
+
+void IOManager::OnPtpEvent(wxCommandEvent& event)
+{
+    auto itThread = m_mRtp.find(m_nCurrentRtp);
+    if(itThread != m_mRtp.end())
+    {
+        itThread->second->MasterClockChanged();
+    }
 }

@@ -113,5 +113,9 @@ struct PAMBASE_IMPEXPORT qosData
     unsigned int nLastSR_NTPlsw;
     timeval tvLastSR_Time;
     unsigned int nSSRC;
+
+    double dTSDF;
+    unsigned int nTimestampErrors;
+    unsigned int nTimestampErrorsTotal;
 };
 

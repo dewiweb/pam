@@ -17,7 +17,9 @@
 #include "settings.h"
 #include <wx/stdpaths.h>
 #include <wx/log.h>
+#include <wx/textfile.h>
 #include "iomanager.h"
+#include "dlgEngineering.h"
 
 IMPLEMENT_APP(pam2App);
 
@@ -25,20 +27,40 @@ bool pam2App::OnInit()
 {
     m_bReset = false;
     #ifndef __WXDEBUG__
-    //wxLog::SetLogLevel(0);
+    wxLog::SetLogLevel(0);
     #endif
     #ifdef __WXGNU__
     wxExecute(wxT("sudo route add -net 224.0.0.0 netmask 240.0.0.0 eth0"));
-    #endif // __WXGNU__
+    double dSeconds;
+    wxTextFile uptime;
+    if(uptime.Open("/proc/uptime"))
+    {
+        if(uptime.GetFirstLine().BeforeFirst(' ').ToDouble(&dSeconds))
+        {
+            if(dSeconds < 60)
+            {
+                dlgEngineering aDlg(NULL);
+                aDlg.ShowModal();
+            }
+        }
+    }
+    #else
+    dlgEngineering aDlg(NULL);
+    aDlg.ShowModal();
+    #endif
 
-    SoundcardManager::Get().Initialize();
+
 
     //#ifdef __WXGNU__
     Settings::Get().ReadSettings(wxString::Format(wxT("%s/pam/pam2.ini"), wxStandardPaths::Get().GetDocumentsDir().c_str()));
     Settings::Get().RemoveKey(wxT("AoIP"), wxT("NMOS_IS-04"));
+    Settings::Get().Write("Startup", "Starting",1);
 
     m_timerHold.SetOwner(this, wxNewId());
     Connect(m_timerHold.GetId(), wxEVT_TIMER, (wxObjectEventFunction)&pam2App::OnTimerHold);
+
+    SoundcardManager::Get().Initialize();
+
     //#else
    // Settings::Get().ReadSettings(wxString::Format(wxT("%s/documents/pam2.ini"), wxStandardPaths::Get().GetExecutablePath().c_str()));
    // #endif
@@ -59,6 +81,7 @@ bool pam2App::OnInit()
 
 int pam2App::FilterEvent(wxEvent& event)
 {
+
     if(event.GetEventType() == wxEVT_LEFT_DOWN)
     {
         if(!m_bReset)
@@ -94,4 +117,5 @@ void pam2App::OnTimerHold(wxTimerEvent& event)
         Settings::Get().Write(wxT("Input"), wxT("Reset"), false);
         m_bReset = false;
     }
+
 }

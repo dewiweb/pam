@@ -6,6 +6,8 @@
 #include "kiss_fft.h"
 #include <queue>
 #include "pmcontrol.h"
+#include "colourgradient.h"
+
 class timedbuffer;
 class FFTBuilder;
 
@@ -99,6 +101,11 @@ class FftMeter : public pmControl
         void SetCursorMode(bool bSet);
         bool GetCursorMode()
         {   return m_bCursorMode;   }
+
+        void SetColourMode(bool bOn)
+        {
+            m_bColour = bOn;
+        }
 
         void TurnoffNudge();
 
@@ -205,6 +212,9 @@ class FftMeter : public pmControl
 
         unsigned long m_nSampleRate;
         unsigned long m_nChannels;
+
+        ColourGradient m_HeatMap;
+        bool m_bColour;
 
 };
 

@@ -14,14 +14,14 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 **********/
 // "liveMedia"
-// Copyright (c) 1996-2018 Live Networks, Inc.  All rights reserved.
+// Copyright (c) 1996-2020 Live Networks, Inc.  All rights reserved.
 // A filter that breaks up a H.264 or H.265 Video Elementary Stream into NAL units.
 // Implementation
 
 #include "H264or5VideoStreamFramer.hh"
 #include "MPEGVideoStreamParser.hh"
 #include "BitVector.hh"
-
+#include <time.h>
 ////////// H264or5VideoStreamParser definition //////////
 
 class H264or5VideoStreamParser: public MPEGVideoStreamParser {
@@ -74,16 +74,17 @@ private:
 
 H264or5VideoStreamFramer
 ::H264or5VideoStreamFramer(int hNumber, UsageEnvironment& env, FramedSource* inputSource,
-			   Boolean createParser, Boolean includeStartCodeInOutput)
+			   Boolean createParser,
+			   Boolean includeStartCodeInOutput, Boolean insertAccessUnitDelimiters)
   : MPEGVideoStreamFramer(env, inputSource),
-    fHNumber(hNumber),
+    fHNumber(hNumber), fIncludeStartCodeInOutput(includeStartCodeInOutput),
+    fInsertAccessUnitDelimiters(insertAccessUnitDelimiters),
     fLastSeenVPS(NULL), fLastSeenVPSSize(0),
     fLastSeenSPS(NULL), fLastSeenSPSSize(0),
     fLastSeenPPS(NULL), fLastSeenPPSSize(0) {
   fParser = createParser
     ? new H264or5VideoStreamParser(hNumber, this, inputSource, includeStartCodeInOutput)
     : NULL;
-  fNextPresentationTime = fPresentationTimeBase;
   fFrameRate = 25.0; // We assume a frame rate of 25 fps, unless we learn otherwise (from parsing a VPS or SPS NAL unit)
 }
 
@@ -124,6 +125,15 @@ void H264or5VideoStreamFramer::saveCopyOfPPS(u_int8_t* from, unsigned size) {
   fLastSeenPPSSize = size;
 }
 
+void H264or5VideoStreamFramer::setPresentationTime() {
+  if (fPresentationTimeBase.tv_sec == 0 && fPresentationTimeBase.tv_usec == 0) {
+    // Set to the current time:
+//    gettimeofday(&fPresentationTimeBase, NULL);
+    fNextPresentationTime = fPresentationTimeBase;
+  }
+  fPresentationTime = fNextPresentationTime;
+}
+
 Boolean H264or5VideoStreamFramer::isVPS(u_int8_t nal_unit_type) {
   // VPS NAL units occur in H.265 only:
   return fHNumber == 265 && nal_unit_type == 32;
@@ -141,6 +151,40 @@ Boolean H264or5VideoStreamFramer::isVCL(u_int8_t nal_unit_type) {
   return fHNumber == 264
     ? (nal_unit_type <= 5 && nal_unit_type > 0)
     : (nal_unit_type <= 31);
+}
+
+void H264or5VideoStreamFramer::doGetNextFrame() {
+  if (fInsertAccessUnitDelimiters && pictureEndMarker()) {
+    // Deliver an "access_unit_delimiter" NAL unit instead:
+    unsigned const startCodeSize = fIncludeStartCodeInOutput ? 4: 0;
+    unsigned const audNALSize = fHNumber == 264 ? 2 : 3;
+
+    fFrameSize = startCodeSize + audNALSize;
+    if (fFrameSize > fMaxSize) { // there's no space
+      fNumTruncatedBytes = fFrameSize - fMaxSize;
+      fFrameSize = fMaxSize;
+      handleClosure();
+      return;
+    }
+
+    if (fIncludeStartCodeInOutput) {
+      *fTo++ = 0x00; *fTo++ = 0x00; *fTo++ = 0x00; *fTo++ = 0x01;
+    }
+    if (fHNumber == 264) {
+      *fTo++ = 9; // "Access unit delimiter" nal_unit_type
+      *fTo++ = 0xF0; // "primary_pic_type" (7); "rbsp_trailing_bits()"
+    } else { // H.265
+      *fTo++ = 35<<1; // "Access unit delimiter" nal_unit_type
+      *fTo++ = 0; // "nuh_layer_id" (0); "nuh_temporal_id_plus1" (0) (Is this correct??)
+      *fTo++ = 0x50; // "pic_type" (2); "rbsp_trailing_bits()" (Is this correct??)
+    }
+
+    pictureEndMarker() = False; // for next time
+    afterGetting(this);
+  } else {
+    // Do the normal delivery of a NAL unit from the parser:
+    MPEGVideoStreamFramer::doGetNextFrame();
+  }
 }
 
 
@@ -472,7 +516,7 @@ void H264or5VideoStreamParser
     (void)bv.get_expGolomb(); // vps_max_dec_pic_buffering_minus1[i]
     (void)bv.get_expGolomb(); // vps_max_num_reorder_pics[i]
     (void)bv.get_expGolomb(); // vps_max_latency_increase_plus1[i]
-  }    
+  }
   unsigned vps_max_layer_id = bv.getBits(6);
   DEBUG_PRINT(vps_max_layer_id);
   unsigned vps_num_layer_sets_minus1 = bv.get_expGolomb();
@@ -684,7 +728,7 @@ void H264or5VideoStreamParser
 		(void)bv.get_expGolomb(); // scaling_list_delta_coef
 	      }
 	    }
-	  } 
+	  }
 	}
       }
     }
@@ -827,7 +871,7 @@ void H264or5VideoStreamParser::analyze_sei_data(u_int8_t nal_unit_type) {
   unsigned seiSize;
   removeEmulationBytes(sei, sizeof sei, seiSize);
 
-  unsigned j = 1; // skip the initial byte (forbidden_zero_bit; nal_ref_idc; nal_unit_type); we've already seen it 
+  unsigned j = 1; // skip the initial byte (forbidden_zero_bit; nal_ref_idc; nal_unit_type); we've already seen it
   while (j < seiSize) {
     unsigned payloadType = 0;
     do {
@@ -894,11 +938,11 @@ void H264or5VideoStreamParser
       unsigned dpb_output_delay = bv.getBits(dpb_output_delay_length_minus1 + 1);
       DEBUG_PRINT(dpb_output_delay);
     }
+    double prevDeltaTfiDivisor = DeltaTfiDivisor;
     if (pic_struct_present_flag) {
       unsigned pic_struct = bv.getBits(4);
       DEBUG_PRINT(pic_struct);
       // Use this to set "DeltaTfiDivisor" (which is used to compute the frame rate):
-      double prevDeltaTfiDivisor = DeltaTfiDivisor; 
       if (fHNumber == 264) {
 	DeltaTfiDivisor =
 	  pic_struct == 0 ? 2.0 :
@@ -919,15 +963,21 @@ void H264or5VideoStreamParser
 	  pic_struct <= 12 ? 1.0 :
 	  2.0;
       }
-      // If "DeltaTfiDivisor" has changed, and we've already computed the frame rate, then
-      // adjust it, based on the new value of "DeltaTfiDivisor":
-      if (DeltaTfiDivisor != prevDeltaTfiDivisor && fParsedFrameRate != 0.0) {
-	  usingSource()->fFrameRate = fParsedFrameRate
-	    = fParsedFrameRate*(prevDeltaTfiDivisor/DeltaTfiDivisor);
-#ifdef DEBUG
-	  fprintf(stderr, "Changed frame rate to %f fps\n", usingSource()->fFrameRate);
-#endif
+    } else {
+      if (fHNumber == 264) {
+	// Need to get field_pic_flag from slice_header to set this properly! #####
+      } else { // H.265
+	DeltaTfiDivisor = 1.0;
       }
+    }
+    // If "DeltaTfiDivisor" has changed, and we've already computed the frame rate, then
+    // adjust it, based on the new value of "DeltaTfiDivisor":
+    if (DeltaTfiDivisor != prevDeltaTfiDivisor && fParsedFrameRate != 0.0) {
+      usingSource()->fFrameRate = fParsedFrameRate
+	= fParsedFrameRate*(prevDeltaTfiDivisor/DeltaTfiDivisor);
+#ifdef DEBUG
+      fprintf(stderr, "Changed frame rate to %f fps\n", usingSource()->fFrameRate);
+#endif
     }
     // Ignore the rest of the payload (timestamps) for now... #####
   }
@@ -940,8 +990,6 @@ void H264or5VideoStreamParser::flushInput() {
   StreamParser::flushInput();
 }
 
-#define NUM_NEXT_SLICE_HEADER_BYTES_TO_ANALYZE 12
-
 unsigned H264or5VideoStreamParser::parse() {
   try {
     // The stream must start with a 0x00000001:
@@ -952,18 +1000,18 @@ unsigned H264or5VideoStreamParser::parse() {
 	get1Byte(); setParseState(); // ensures that we progress over bad data
       }
       skipBytes(4); // skip this initial code
-      
+
       setParseState();
       fHaveSeenFirstStartCode = True; // from now on
     }
-    
+
     if (fOutputStartCodeSize > 0 && curFrameSize() == 0 && !haveSeenEOF()) {
       // Include a start code in the output:
       save4Bytes(0x00000001);
     }
 
     // Then save everything up until the next 0x00000001 (4 bytes) or 0x000001 (3 bytes), or we hit EOF.
-    // Also make note of the first byte, because it contains the "nal_unit_type": 
+    // Also make note of the first byte, because it contains the "nal_unit_type":
     if (haveSeenEOF()) {
       // We hit EOF the last time that we tried to parse this data, so we know that any remaining unparsed data
       // forms a complete NAL unit, and that there's no 'start code' at the end:
@@ -1133,7 +1181,7 @@ unsigned H264or5VideoStreamParser::parse() {
 	thisNALUnitEndsAccessUnit = False;
       }
     }
-	
+
     if (thisNALUnitEndsAccessUnit) {
 #ifdef DEBUG
       fprintf(stderr, "*****This NAL unit ends the current access unit*****\n");

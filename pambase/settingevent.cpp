@@ -1,6 +1,12 @@
 #include "settingevent.h"
 
+
+#ifdef WXSPAM
+DEFINE_EVENT_TYPE(wxEVT_SETTING_CHANGED)
+#else
 wxDEFINE_EVENT(wxEVT_SETTING_CHANGED, SettingEvent);
+#endif // WXSPAM
+
 //wxDECLARE_DYNAMIC_CLASS(SettingEvent, wxCommandEvent)
 
 SettingEvent::SettingEvent() : wxCommandEvent(wxEVT_SETTING_CHANGED, wxID_ANY)
@@ -17,11 +23,11 @@ m_sValue(sValue)
 }
 
 
-SettingEvent::SettingEvent(const SettingEvent& event) : wxCommandEvent(event)
+SettingEvent::SettingEvent(const SettingEvent& event) : wxCommandEvent(event), 
+	m_sSection(event.GetSection()),
+	m_sKey(event.GetKey()),
+	m_sValue(event.GetValue())
 {
-    m_sSection = event.GetSection();
-    m_sKey = event.GetKey();
-    m_sValue = event.GetValue();
 }
 
 

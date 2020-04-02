@@ -18,7 +18,19 @@ BEGIN_EVENT_TABLE(wmipeditpnl,pmPanel)
 	//*)
 END_EVENT_TABLE()
 
- wxIMPLEMENT_DYNAMIC_CLASS(wmipeditpnl, pmPanel);
+#ifdef WXSPAM
+IMPLEMENT_DYNAMIC_CLASS(wmipeditpnl, pmControl)
+#else
+wxIMPLEMENT_DYNAMIC_CLASS(wmipeditpnl, pmPanel);
+#endif // WXSPAM
+
+wmipeditpnl::wmipeditpnl() : pmPanel(),
+    m_pEdt1(0),
+    m_pEdt2(0),
+    m_pEdt3(0),
+    m_pEdt4(0)
+{
+}
 
 wmipeditpnl::wmipeditpnl(wxWindow* parent,wxWindowID id,const wxPoint& pos,const wxSize& size, unsigned long nStyle, const wxString& sEmpty) : pmPanel(),
     m_pEdt1(0),

@@ -3,7 +3,10 @@
 #include "timedbuffer.h"
 #include "settings.h"
 #include <wx/log.h>
-
+#ifdef PTPMONKEY
+#include "wxptp.h"
+#endif
+#include "aoipinfobuilder.h"
 
 //(*InternalHeaders(pnlAoIPInfo)
 #include <wx/font.h>
@@ -103,6 +106,8 @@ const long pnlAoIPInfo::ID_M_PLBL31 = wxNewId();
 const long pnlAoIPInfo::ID_M_PLBL32 = wxNewId();
 const long pnlAoIPInfo::ID_M_PLBL85 = wxNewId();
 const long pnlAoIPInfo::ID_M_PLBL35 = wxNewId();
+const long pnlAoIPInfo::ID_M_PLBL89 = wxNewId();
+const long pnlAoIPInfo::ID_M_PLBL90 = wxNewId();
 const long pnlAoIPInfo::ID_M_PLBL86 = wxNewId();
 const long pnlAoIPInfo::ID_CUSTOM12 = wxNewId();
 const long pnlAoIPInfo::ID_PANEL4 = wxNewId();
@@ -117,7 +122,9 @@ BEGIN_EVENT_TABLE(pnlAoIPInfo,wxPanel)
 	//*)
 END_EVENT_TABLE()
 
-pnlAoIPInfo::pnlAoIPInfo(wxWindow* parent,wxWindowID id,const wxPoint& pos,const wxSize& size)
+pnlAoIPInfo::pnlAoIPInfo(wxWindow* parent,AoIPInfoBuilder* pBuilder, wxWindowID id,const wxPoint& pos,const wxSize& size) :
+    m_pBuilder(pBuilder),
+    m_pSession(0)
 {
 	//(*Initialize(pnlAoIPInfo)
 	Create(parent, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL, _T("wxID_ANY"));
@@ -652,6 +659,18 @@ pnlAoIPInfo::pnlAoIPInfo(wxWindow* parent,wxWindowID id,const wxPoint& pos,const
 	m_plblQoSJitter->SetBackgroundColour(wxColour(255,255,255));
 	wxFont m_plblQoSJitterFont(10,wxFONTFAMILY_SWISS,wxFONTSTYLE_NORMAL,wxFONTWEIGHT_BOLD,false,_T("Consolas"),wxFONTENCODING_DEFAULT);
 	m_plblQoSJitter->SetFont(m_plblQoSJitterFont);
+	m_pLbl45 = new wmLabel(pnlQoS, ID_M_PLBL89, _("TS-DF"), wxPoint(200,225), wxSize(194,20), 0, _T("ID_M_PLBL89"));
+	m_pLbl45->SetBorderState(uiRect::BORDER_NONE);
+	m_pLbl45->GetUiRect().SetGradient(0);
+	m_pLbl45->SetForegroundColour(wxColour(255,255,255));
+	m_pLbl45->SetBackgroundColour(wxColour(0,0,255));
+	m_plblTSDF = new wmLabel(pnlQoS, ID_M_PLBL90, wxEmptyString, wxPoint(200,246), wxSize(194,25), 0, _T("ID_M_PLBL90"));
+	m_plblTSDF->SetBorderState(uiRect::BORDER_NONE);
+	m_plblTSDF->GetUiRect().SetGradient(0);
+	m_plblTSDF->SetForegroundColour(wxColour(0,128,0));
+	m_plblTSDF->SetBackgroundColour(wxColour(255,255,255));
+	wxFont m_plblTSDFFont(10,wxFONTFAMILY_SWISS,wxFONTSTYLE_NORMAL,wxFONTWEIGHT_BOLD,false,_T("Consolas"),wxFONTENCODING_DEFAULT);
+	m_plblTSDF->SetFont(m_plblTSDFFont);
 	m_plblGraph = new wmLabel(pnlQoS, ID_M_PLBL86, wxEmptyString, wxPoint(400,246), wxSize(194,25), 0, _T("ID_M_PLBL86"));
 	m_plblGraph->SetBorderState(uiRect::BORDER_NONE);
 	m_plblGraph->GetUiRect().SetGradient(0);
@@ -671,28 +690,42 @@ pnlAoIPInfo::pnlAoIPInfo(wxWindow* parent,wxWindowID id,const wxPoint& pos,const
 	m_pswpInfo->AddPage(pnlSDP, _("Raw SDP"), false);
 	//*)
 
+	#ifdef PTPMONKEY
+	wxPtp::Get().AddHandler(this);
+
+	Connect(wxID_ANY, wxEVT_CLOCK_MASTER, (wxObjectEventFunction)&pnlAoIPInfo::OnPtpEvent);
+	Connect(wxID_ANY, wxEVT_CLOCK_SLAVE, (wxObjectEventFunction)&pnlAoIPInfo::OnPtpEvent);
+    Connect(wxID_ANY, wxEVT_CLOCK_UPDATED, (wxObjectEventFunction)&pnlAoIPInfo::OnPtpEvent);
+    #endif // PTPMONKEY
+
+	m_plblEpoch = new wmLabel(pnlSubsession, wxNewId(), wxEmptyString, wxPoint(305,151), wxSize(249,25), 0, _T("ID_M_PLBL57"));
+	m_plblEpoch->SetBorderState(uiRect::BORDER_NONE);
+	m_plblEpoch->GetUiRect().SetGradient(0);
+	m_plblEpoch->SetForegroundColour(wxColour(0,128,0));
+	m_plblEpoch->SetBackgroundColour(wxColour(255,255,255));
+	wxFont m_plblEpochFont(10,wxFONTFAMILY_SWISS,wxFONTSTYLE_NORMAL,wxFONTWEIGHT_BOLD,false,_T("Consolas"),wxFONTENCODING_DEFAULT);
+	m_plblEpoch->SetFont(m_plblEpochFont);
+
     m_pswpInfo->SetFont(wxFont(8,wxFONTFAMILY_SWISS,wxFONTSTYLE_NORMAL,wxFONTWEIGHT_NORMAL,false,_T("Arial"),wxFONTENCODING_DEFAULT));
     m_pGraph->SetFont(wxFont(7,wxFONTFAMILY_SWISS,wxFONTSTYLE_NORMAL,wxFONTWEIGHT_NORMAL,false,_T("Tahoma"),wxFONTENCODING_DEFAULT));
+
+    ClearGraphs();
 
 	m_pGraph->AddGraph(wxT("kBit/s"), wxColour(0,255,0));
 	m_pGraph->ShowGraph(wxT("kBit/s"), false);
 	m_pGraph->ShowRange(wxT("kBit/s"), true);
 	m_pGraph->SetLimit(wxT("kBit/s"), 2310.0, 2300.0);
 
-	m_pGraph->AddGraph(wxT("kBit/s Av"), wxColour(255,255,255));
-	m_pGraph->ShowGraph(wxT("kBit/s Av"), false);
-	m_pGraph->ShowRange(wxT("kBit/s Av"), true);
-	m_pGraph->SetLimit(wxT("kBit/s Av"), 2310.0, 2300.0);
+	m_pGraph->AddGraph(wxT("TS-DF"), wxColour(255,255,255));
+	m_pGraph->ShowGraph(wxT("TS-DF"), false);
+	m_pGraph->ShowRange(wxT("TS-DF"), true);
+	m_pGraph->SetLimit(wxT("TS-DF"), 0, 1);
 
 	m_pGraph->AddGraph(wxT("Packet Gap"), wxColour(0,0,255));
 	m_pGraph->ShowGraph(wxT("Packet Gap"), false);
 	m_pGraph->ShowRange(wxT("Packet Gap"), true);
 	m_pGraph->SetLimit(wxT("Packet Gap"), 1, 0.1);
 
-	m_pGraph->AddGraph(wxT("Packet Gap Av"), wxColour(255,255,255));
-	m_pGraph->ShowGraph(wxT("Packet Gap Av"), false);
-	m_pGraph->ShowRange(wxT("Packet Gap Av"), true);
-	m_pGraph->SetLimit(wxT("Packet Gap Av"), 1, 0.1);
 
 	m_pGraph->AddGraph(wxT("Packet Loss"), wxColour(0,255,0));
 	m_pGraph->ShowGraph(wxT("Packet Loss"), false);
@@ -703,7 +736,47 @@ pnlAoIPInfo::pnlAoIPInfo(wxWindow* parent,wxWindowID id,const wxPoint& pos,const
 	m_pGraph->ShowGraph(wxT("Jitter"), false);
 	m_pGraph->ShowRange(wxT("Jitter"), true);
 	m_pGraph->SetLimit(wxT("Jitter"), 1, 0.1);
+
+	m_pGraph->AddGraph(wxT("Timestamp"), wxColour(0,0,255));
+	m_pGraph->ShowGraph(wxT("Timestamp"), false);
+	m_pGraph->ShowRange(wxT("Timestamp"), false);
+	m_pGraph->SetLimit(wxT("Timestamp"), 1,0);
+
+    m_pGraph->AddGraph(wxT("Timestamp Errors"), wxColour(255,0,0));
+	m_pGraph->ShowGraph(wxT("Timestamp Errors"), false);
+	m_pGraph->ShowRange(wxT("Timestamp Errors"), true);
+	m_pGraph->SetLimit(wxT("Timestamp Errors"), 1, 0.1);
+
+	//ConnectLeftUp();
+
 }
+
+void pnlAoIPInfo::ConnectLeftUp()
+{
+    wxWindowList lst = GetChildren();
+	for(auto pWnd : lst)
+    {
+        wxPanel* pPanel = dynamic_cast<wxPanel*>(pWnd);
+        if(pPanel)
+        {
+            pPanel->Connect(wxEVT_LEFT_UP,(wxObjectEventFunction)&pnlAoIPInfo::OnInfoLeftUp,0,this);
+        }
+        else
+        {
+            wmLabel* pLabel = dynamic_cast<wmLabel*>(pWnd);
+            if(pLabel)
+            {
+                pLabel->Connect(wxEVT_LEFT_UP,(wxObjectEventFunction)&pnlAoIPInfo::OnInfoLeftUp,0,this);
+            }
+        }
+    }
+}
+
+void pnlAoIPInfo::OnInfoLeftUp(wxMouseEvent& event)
+{
+    m_pBuilder->Maximize((GetSize().x <= 600));
+}
+
 
 pnlAoIPInfo::~pnlAoIPInfo()
 {
@@ -730,37 +803,52 @@ void pnlAoIPInfo::QoSUpdated(qosData* pData)
     m_plblQoSInterMax->SetLabel(wxString::Format(wxT("%f ms"), pData->dInter_packet_gap_ms_max));
 
     m_plblQoSJitter->SetLabel(wxString::Format(wxT("%f ms"),pData->dJitter));
+    m_plblTSDF->SetLabel(wxString::Format(wxT("%f"), pData->dTSDF));
 
-    m_pGraph->SetLimit(wxT("kBit/s"), pData->dkbits_per_second_max, pData->dkbits_per_second_min);
-    m_pGraph->SetLimit(wxT("kBit/s Av"), pData->dkbits_per_second_max, pData->dkbits_per_second_min);
-    m_pGraph->SetLimit(wxT("Packet Gap"), pData->dInter_packet_gap_ms_max, pData->dInter_packet_gap_ms_min);
-    m_pGraph->SetLimit(wxT("Packet Loss"), pData->dPacket_loss_fraction_max, pData->dPacket_loss_fraction_min);
 
-    pair<double,double> pairMinMax(m_pGraph->GetRange(wxT("kBit/s")));
-    m_pGraph->SetLimit(wxT("kBit/s"), max(pairMinMax.second, pData->dkbits_per_second_Now), min(pairMinMax.first, pData->dkbits_per_second_Now));
-    m_pGraph->SetLimit(wxT("kBit/s Av"), max(pairMinMax.second, pData->dkbits_per_second_Now), min(pairMinMax.first, pData->dkbits_per_second_Now));
+    m_dKbps[GRAPH_MIN] = std::min(pData->dkbits_per_second_Now, m_dKbps[GRAPH_MIN]);
+    m_dKbps[GRAPH_MAX] = std::max(pData->dkbits_per_second_Now, m_dKbps[GRAPH_MAX]);
+
+    m_dJitter[GRAPH_MIN] = std::min(pData->dJitter, m_dJitter[GRAPH_MIN]);
+    m_dJitter[GRAPH_MAX] = std::max(pData->dJitter, m_dJitter[GRAPH_MAX]);
+
+    m_dGap[GRAPH_MIN] = std::min(pData->dInter_packet_gap_ms_Now, m_dGap[GRAPH_MIN]);
+    m_dGap[GRAPH_MAX] = std::max(pData->dInter_packet_gap_ms_Now, m_dGap[GRAPH_MAX]);
+
+    m_dLoss[GRAPH_MIN] = std::min(pData->dPacket_loss_fraction_av, m_dLoss[GRAPH_MIN]);
+    m_dLoss[GRAPH_MAX] = std::max(pData->dPacket_loss_fraction_av, m_dLoss[GRAPH_MAX]);
+
+    m_dTSDF[GRAPH_MIN] = std::min(pData->dTSDF, m_dTSDF[GRAPH_MIN]);
+    m_dTSDF[GRAPH_MAX] = std::max(pData->dTSDF, m_dTSDF[GRAPH_MAX]);
+
+    m_nTimestampErrors[GRAPH_MIN] = std::min(pData->nTimestampErrors, m_nTimestampErrors[GRAPH_MIN]);
+    m_nTimestampErrors[GRAPH_MAX] = std::max(pData->nTimestampErrors, m_nTimestampErrors[GRAPH_MAX]);
+
+    m_pGraph->SetLimit(wxT("kBit/s"), m_dKbps[GRAPH_MAX], m_dKbps[GRAPH_MIN]);
     m_pGraph->AddPeak(wxT("kBit/s"), pData->dkbits_per_second_Now);
-    m_pGraph->AddPeak(wxT("kBit/s Av"), pData->dkbits_per_second_Av);
 
-    pairMinMax = m_pGraph->GetRange(wxT("Packet Gap"));
-    m_pGraph->SetLimit(wxT("Packet Gap"), max(pairMinMax.second, pData->dInter_packet_gap_ms_Now), min(pairMinMax.first, pData->dInter_packet_gap_ms_Now));
+    m_pGraph->SetLimit(wxT("Packet Gap"),m_dGap[GRAPH_MAX], m_dGap[GRAPH_MIN]);
     m_pGraph->AddPeak(wxT("Packet Gap"), pData->dInter_packet_gap_ms_Now);
 
-    pairMinMax = m_pGraph->GetRange(wxT("Packet Loss"));
-    m_pGraph->SetLimit(wxT("Packet Loss"), max(pairMinMax.second, pData->dPacket_loss_fraction_av), min(pairMinMax.first, pData->dPacket_loss_fraction_av));
+    m_pGraph->SetLimit(wxT("Packet Loss"), m_dLoss[GRAPH_MAX], m_dLoss[GRAPH_MIN]);
     m_pGraph->AddPeak(wxT("Packet Loss"), pData->dPacket_loss_fraction_av);
 
-    pairMinMax = m_pGraph->GetRange(wxT("Jitter"));
-    m_pGraph->SetLimit(wxT("Jitter"), max(pairMinMax.second, pData->dJitter), min(pairMinMax.first, pData->dJitter));
+
+    m_pGraph->SetLimit(wxT("Jitter"), m_dJitter[GRAPH_MAX], m_dJitter[GRAPH_MIN]);
     m_pGraph->AddPeak(wxT("Jitter"), pData->dJitter);
 
+    m_pGraph->SetLimit(wxT("TS-DF"), m_dTSDF[GRAPH_MAX], m_dTSDF[GRAPH_MIN]);
+    m_pGraph->AddPeak(wxT("TS-DF"), pData->dTSDF);
+
+    m_pGraph->SetLimit(wxT("Timestamp Errors"), 10,0);
+    m_pGraph->AddPeak(wxT("Timestamp Errors"), pData->nTimestampErrors);
 
 }
 
 
 void pnlAoIPInfo::SetAudioData(const timedbuffer* pTimedBuffer)
 {
-    SetTimestamp(pTimedBuffer->GetTransmissionTime(), m_plblTransmissionTime);
+    SetTimestamp(pTimedBuffer->GetTransmissionTime(), m_plblTransmissionTime, false);
     SetTimestamp(pTimedBuffer->GetTimeVal(), m_plblTimestampIn);
     SetTimestamp(pTimedBuffer->GetPlaybackTime(), m_plblTimestampOut);
     m_plblCurrentTimestamp->SetLabel(wxString::Format(wxT("%u"), pTimedBuffer->GetTimestamp()));
@@ -768,35 +856,61 @@ void pnlAoIPInfo::SetAudioData(const timedbuffer* pTimedBuffer)
 
     m_plblFrameSize->SetLabel(wxString::Format(wxT("%d bytes"), pTimedBuffer->GetDuration()));
 
-    double dDuration = static_cast<double>(pTimedBuffer->GetDuration())/static_cast<double>(m_nSampleRate*m_nFrameSize);
+    m_dFrameDuration = static_cast<double>(pTimedBuffer->GetDuration())/static_cast<double>(m_nSampleRate*m_nFrameSize)*1e6;
 
-    m_plblFrameDuration->SetLabel(wxString::Format(wxT("%.2f ms"), dDuration*1000.0));
+    m_plblFrameDuration->SetLabel(wxString::Format(wxT("%.2f us"), m_dFrameDuration));
 
     m_plblPlaybackQueue->SetLabel(wxString::Format(wxT("%d"), pTimedBuffer->GetBufferDepth()));
+
+    m_pGraph->SetLimit("Timestamp", 1, 0);
+    double dTimestamp(static_cast<double>(pTimedBuffer->GetTimestamp())/4294967296.0);
+    m_pGraph->AddPeak("Timestamp",dTimestamp);//static_cast<double>(pTimedBuffer->GetTimestamp())/2e32);
+
+    #ifdef PTPMONKEY
+    m_plblTransmissionTime->SetBackgroundColour(wxPtp::Get().IsSyncedToMaster(0) ? *wxWHITE : wxColour(255,100,100));
+    m_plblTimestampIn->SetBackgroundColour(wxPtp::Get().IsSyncedToMaster(0) ? *wxWHITE : wxColour(255,100,100));
+    m_plblLatencyNetwork->SetBackgroundColour(wxPtp::Get().IsSyncedToMaster(0) ? *wxWHITE : wxColour(255,100,100));
+    #endif // PTPMONKEY
 }
 
 
 
-void pnlAoIPInfo::SetTimestamp(const pairTime_t& tv, wmLabel* pLabel)
+void pnlAoIPInfo::SetTimestamp(const pairTime_t& tv, wmLabel* pLabel, bool bDate)
 {
     wxDateTime dt(time_t(tv.first));
-    pLabel->SetLabel(wxString::Format(wxT("%s:%03d"), dt.Format(wxT("%H:%M:%S")).c_str(), tv.second/1000));
+    if(!bDate)
+    {
+        pLabel->SetLabel(wxString::Format(wxT("%s:%03d"), dt.Format(wxT("%H:%M:%S")).c_str(), tv.second/1000));
+    }
+    else
+    {
+        pLabel->SetLabel(wxString::Format(wxT("%s:%03d"), dt.Format(wxT("%Y-%m-%d %H:%M:%S")).c_str(), tv.second/1000));
+    }
 }
 
 
 void pnlAoIPInfo::ShowLatency(const timedbuffer* pTimedBuffer)
 {
     double dPlayback = pTimedBuffer->GetPlaybackLatency();
-    double dTransmission = static_cast<double>(pTimedBuffer->GetTransmissionTime().second)/1000000.0 + static_cast<double>(pTimedBuffer->GetTransmissionTime().first);
-    double dPresentation = static_cast<double>(pTimedBuffer->GetTimeVal().second)/1000000.0 + static_cast<double>(pTimedBuffer->GetTimeVal().first);
+    double dTransmission = static_cast<double>(pTimedBuffer->GetTransmissionTime().second) + (static_cast<double>(pTimedBuffer->GetTransmissionTime().first)*1000000.0);
+    double dPresentation = static_cast<double>(pTimedBuffer->GetTimeVal().second) + (static_cast<double>(pTimedBuffer->GetTimeVal().first)*1000000.0);
 
-    m_plblLatency->SetLabel(wxString::Format(wxT("%.03f s"), dPlayback/1000000.0));//+(dPresentation-dTransmission)));
-    m_plblLatencyNetwork->SetLabel(wxString::Format(wxT("%.03f s"), (dPresentation-dTransmission)));
+    dTransmission += m_dFrameDuration;   //we add the duration on because the transmission time is first sample not last sample of frane
+    m_plblLatency->SetLabel(wxString::Format(wxT("%.0f us"), dPlayback));//+(dPresentation-dTransmission)));
+    m_plblLatencyNetwork->SetLabel(wxString::Format(wxT("%.0f us"), (dPresentation-dTransmission)));
+    #ifdef PTPMONKEY	
+    timeval tv(wxPtp::Get().GetLastPtpOffset(0));
+    timeval tvSet(wxPtp::Get().GetPtpOffset(0));
+    long long int nLast = static_cast<long long int>(tv.tv_sec)*1e6 + static_cast<long long int>(tv.tv_usec);
+    long long int nSet = static_cast<long long int>(tvSet.tv_sec)*1e6 + static_cast<long long int>(tvSet.tv_usec);
+    m_plblEpoch->SetLabel(wxString::Format("%lld us", nLast-nSet));
+    #endif
 }
 
 
 void pnlAoIPInfo::SessionStarted(const session& aSession)
 {
+    m_pSession = &aSession;
     m_plblSessionName->SetLabel(aSession.sName);
     if(Settings::Get().Read(wxT("Input"), wxT("Type"), wxEmptyString) == wxT("AoIP"))
     {
@@ -809,6 +923,8 @@ void pnlAoIPInfo::SessionStarted(const session& aSession)
     m_plblSyncType->SetLabel(aSession.refClock.sType);
     m_plblSyncVersion->SetLabel(aSession.refClock.sVersion);
     m_plblSyncId->SetLabel(aSession.refClock.sId);
+
+
     m_plblSyncDomain->SetLabel(wxString::Format(wxT("%u"), aSession.refClock.nDomain));
     m_plblSessionType->SetLabel(aSession.sType);
     m_ptxtSDP->SetValue(aSession.sRawSDP);
@@ -841,7 +957,22 @@ void pnlAoIPInfo::SessionStarted(const session& aSession)
         m_plblSubSyncType->SetLabel(aSession.GetCurrentSubsession()->refClock.sType);
         m_plblSubSyncVersion->SetLabel(aSession.GetCurrentSubsession()->refClock.sVersion);
         m_plblSubSyncId->SetLabel(aSession.GetCurrentSubsession()->refClock.sId);
+        #ifdef PTPMONKEY
+        if(m_plblSubSyncId->GetLabel().MakeLower() == wxPtp::Get().GetMasterClockId(0))
+        {
+            m_plblSubSyncId->SetBackgroundColour(wxColour(255,255,255));
+        }
+        else
+        {
+            m_plblSubSyncId->SetBackgroundColour(wxColour(255,100,100));
+        }
+        #else
+	    m_plblSubSyncId->SetBackgroundColour(wxColour(255,255,100));
+	#endif
         m_plblSubSyncDomain->SetLabel(wxString::Format(wxT("%u"), aSession.GetCurrentSubsession()->refClock.nDomain));
+
+
+
     }
     else
     {
@@ -877,18 +1008,42 @@ void pnlAoIPInfo::ShowGraph(const wxString& sGraph)
 {
     m_pGraph->HideAllGraphs();
     m_pGraph->ShowGraph(sGraph);
-    if(sGraph == wxT("kBit/s"))
-    {
-        m_pGraph->ShowGraph(wxT("kBit/s Av"));
-    }
-    else if(sGraph == wxT("Packet Gap"))
-    {
-        m_pGraph->ShowGraph(wxT("Packet Gap Av"));
-    }
     m_plblGraph->SetLabel(sGraph);
 }
 
 void pnlAoIPInfo::ClearGraphs()
 {
+    m_dKbps[GRAPH_MIN] = 0xFFFFFF;
+    m_dKbps[GRAPH_MAX] = -1;
+
+    m_dJitter[GRAPH_MIN] = 0xFFFFFF;;
+    m_dJitter[GRAPH_MAX] = -1;
+
+    m_dGap[GRAPH_MIN] = 0xFFFFFF;
+    m_dGap[GRAPH_MAX] = -1;
+
+    m_dLoss[GRAPH_MIN] = 0xFFFFFF;;
+    m_dLoss[GRAPH_MAX] = -1;
+
+    m_dTSDF[GRAPH_MIN] = 0xFFFFFF;;
+    m_dTSDF[GRAPH_MAX] = -1;
+
+    m_nTimestampErrors[GRAPH_MIN] = 0xFFFFFFFF;
+    m_nTimestampErrors[GRAPH_MAX] = -1;
+
     m_pGraph->ClearGraphs();
+}
+
+void pnlAoIPInfo::OnPtpEvent(wxCommandEvent& event)
+{
+    #ifdef PTPMONKEY
+    if(m_plblSubSyncId->GetLabel().MakeLower() == wxPtp::Get().GetMasterClockId(0))
+    {
+        m_plblSubSyncId->SetBackgroundColour(wxColour(255,255,255));
+    }
+    else
+    {
+        m_plblSubSyncId->SetBackgroundColour(wxColour(255,100,100));
+    }
+    #endif
 }

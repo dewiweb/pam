@@ -6,12 +6,18 @@
 
 using namespace std;
 
-FFTAlgorithm::FFTAlgorithm()
+FFTAlgorithm::FFTAlgorithm() :
+m_dBinSize(0.0),
+m_dFundamentalBinFrequency(0.0),
+m_dFundamentalAmplitude(0.0),
+m_dTHD(0.0),
+m_nPeaks(0)
 {
 
 }
 
 vector<kiss_fft_cpx> FFTAlgorithm::DoFFT(list<float>& lstBuffer, unsigned long nSampleRate, unsigned long nChannels, int nRouting, int nWindow, unsigned int nBins, unsigned int nBufferToDelete)
+
 {
     m_vfft_in.resize((nBins-1)*2);
     vector<kiss_fft_cpx> vfft_out;
@@ -196,7 +202,7 @@ float FFTAlgorithm::Bessel(float x)
     float dSum = 0;
     float dXtoIPower;
 
-    for(int i = i; i < 10; i++)
+    for(int i = 0; i < 10; i++)
     {
         dXtoIPower = pow(x/2.0, static_cast<float>(i));
 

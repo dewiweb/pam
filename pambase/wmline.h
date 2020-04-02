@@ -47,13 +47,16 @@ typedef std::map<wxString, wmLine> mLines_t;
 class PAMBASE_IMPEXPORT wmLineWnd : public pmControl
 {
     DECLARE_EVENT_TABLE()
+    #ifdef WXSPAM
+    DECLARE_DYNAMIC_CLASS(wmLineWnd)
+    #else
     wxDECLARE_DYNAMIC_CLASS(wmLineWnd);
-
+    #endif // WXSPAM
     public:
 
         /** @brief default constructor
         **/
-        wmLineWnd() : pmControl() { }
+        wmLineWnd() : pmControl(), m_nStyle(0) { }
 
         /** @brief Constructor - made to be the same as a wxButton
         *   @param parent pointer to the parent window

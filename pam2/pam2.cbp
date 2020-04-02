@@ -44,7 +44,7 @@
 					<Add option="-Wl,--enable-auto-import,-Map=pam2d.map" />
 					<Add library="wxmsw30ud_gcc_custom" />
 					<Add library="pambased" />
-					<Add library="portaudiod" />
+					<Add library="portaudio" />
 					<Add library="libcurl" />
 					<Add library="Ws2_32" />
 					<Add library="iphlpapi" />
@@ -113,7 +113,6 @@
 					<Add option="-fpermissive" />
 					<Add option="-DwxUSE_UNICODE" />
 					<Add option="-D__WXGNU__" />
-					<Add option="-D__NMOS__" />
 					<Add directory="$(#nmos.include)" />
 					<Add directory="$(#json.include)" />
 				</Compiler>
@@ -123,7 +122,6 @@
 					<Add library="portaudio" />
 					<Add library="pambase" />
 					<Add library="curl" />
-					<Add library="nmos" />
 					<Add directory="$(#nmos.lib)" />
 				</Linker>
 				<ExtraCommands>
@@ -143,7 +141,6 @@
 					<Add option="-D__WXGNU__" />
 					<Add option="-DPAMBASE_DEBUG" />
 					<Add option="-D__WXDEBUG__" />
-					<Add option="-D__NMOS__" />
 					<Add directory="$(#nmos.include)" />
 					<Add directory="$(#json.include)" />
 				</Compiler>
@@ -154,14 +151,42 @@
 					<Add library="portaudio" />
 					<Add library="pambased" />
 					<Add library="curl" />
-					<Add library="nmosd" />
 					<Add directory="$(#nmos.lib)" />
 				</Linker>
+			</Target>
+			<Target title="Linux Release+NMOS">
+				<Option output="../bin/pam2" prefix_auto="1" extension_auto="1" />
+				<Option object_output=".objs/nmos" />
+				<Option type="0" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-O3" />
+					<Add option="`wx-config --cxxflags`" />
+					<Add option="-fpermissive" />
+					<Add option="-DwxUSE_UNICODE" />
+					<Add option="-D__WXGNU__" />
+					<Add option="-D__NMOS__" />
+					<Add directory="$(#nmos.include)" />
+					<Add directory="$(#json.include)" />
+				</Compiler>
+				<Linker>
+					<Add option="`wx-config --libs`" />
+					<Add option="`pkg-config --libs avahi-client`" />
+					<Add library="portaudio" />
+					<Add library="pambase" />
+					<Add library="curl" />
+					<Add library="nmos" />
+					<Add directory="$(#nmos.lib)" />
+				</Linker>
+				<ExtraCommands>
+					<Add after="../manifest_creator/bin/LinuxRelease/manifest_creator" />
+				</ExtraCommands>
 			</Target>
 		</Build>
 		<Compiler>
 			<Add option="-Wall" />
 			<Add option="-D_app_" />
+			<Add option="-DNO_OPENSSL" />
 			<Add directory="C:/wxWidgets-3.0.2/include" />
 			<Add directory="../pambase" />
 			<Add directory="$(#live_media.include)" />
@@ -185,6 +210,8 @@
 		<Unit filename="dlgAoIP.h" />
 		<Unit filename="dlgEditName.cpp" />
 		<Unit filename="dlgEditName.h" />
+		<Unit filename="dlgEngineering.cpp" />
+		<Unit filename="dlgEngineering.h" />
 		<Unit filename="dlgNoInput.cpp" />
 		<Unit filename="dlgNoInput.h" />
 		<Unit filename="dlgPin.cpp" />
@@ -209,6 +236,8 @@
 			<Option compilerVar="WINDRES" />
 			<Option target="&lt;{~None~}&gt;" />
 		</Unit>
+		<Unit filename="pnlAoIPSelection.cpp" />
+		<Unit filename="pnlAoIPSelection.h" />
 		<Unit filename="pnlHelp.cpp" />
 		<Unit filename="pnlHelp.h" />
 		<Unit filename="pnlLog.cpp" />
@@ -235,13 +264,18 @@
 		<Unit filename="pnlTestOptions.h" />
 		<Unit filename="pnlTests.cpp" />
 		<Unit filename="pnlTests.h" />
+		<Unit filename="pnlUSB.cpp" />
+		<Unit filename="pnlUSB.h" />
 		<Unit filename="pnlUpdate.cpp" />
 		<Unit filename="pnlUpdate.h" />
 		<Unit filename="senderbuttonfactory.cpp" />
 		<Unit filename="senderbuttonfactory.h" />
 		<Unit filename="version.h" />
+		<Unit filename="wxbitmappanel.h" />
 		<Unit filename="wxclientapiposter.cpp" />
 		<Unit filename="wxclientapiposter.h" />
+		<Unit filename="wxdirtraverseusb.cpp" />
+		<Unit filename="wxdirtraverseusb.h" />
 		<Unit filename="wxeventposter.cpp" />
 		<Unit filename="wxeventposter.h" />
 		<Unit filename="wxlogoutput.cpp" />
@@ -253,10 +287,12 @@
 		<Unit filename="wxpammconnection.h" />
 		<Unit filename="wxsmith/dlgAoIP.wxs" />
 		<Unit filename="wxsmith/dlgEditName.wxs" />
+		<Unit filename="wxsmith/dlgEngineering.wxs" />
 		<Unit filename="wxsmith/dlgMask.wxs" />
 		<Unit filename="wxsmith/dlgPin.wxs" />
 		<Unit filename="wxsmith/dlgSequence.wxs" />
 		<Unit filename="wxsmith/pnlAoIPInfo.wxs" />
+		<Unit filename="wxsmith/pnlAoIPSelection.wxs" />
 		<Unit filename="wxsmith/pnlHelp.wxs" />
 		<Unit filename="wxsmith/pnlLog.wxs" />
 		<Unit filename="wxsmith/pnlLogControl.wxs" />
@@ -267,6 +303,7 @@
 		<Unit filename="wxsmith/pnlSettingsProfiles.wxs" />
 		<Unit filename="wxsmith/pnlTestOptions.wxs" />
 		<Unit filename="wxsmith/pnlTests.wxs" />
+		<Unit filename="wxsmith/pnlUSB.wxs" />
 		<Unit filename="wxsmith/pnlUpdate.wxs" />
 		<Extensions>
 			<code_completion />
@@ -279,7 +316,6 @@
 					<wxPanel wxs="wxsmith/pnlSettings.wxs" src="pnlSettings.cpp" hdr="pnlSettings.h" fwddecl="0" i18n="1" name="pnlSettings" language="CPP" />
 					<wxPanel wxs="wxsmith/pnlRTP.wxs" src="pnlRTP.cpp" hdr="pnlRTP.h" fwddecl="0" i18n="1" name="pnlRTP" language="CPP" />
 					<wxPanel wxs="wxsmith/pnlNetworkSetup.wxs" src="pnlNetworkSetup.cpp" hdr="pnlNetworkSetup.h" fwddecl="0" i18n="1" name="pnlNetworkSetup" language="CPP" />
-					<wxPanel wxs="wxsmith/pnlSettingsInput.wxs" src="pnlSettingsInput.cpp" hdr="pnlSettingsInput.h" fwddecl="0" i18n="1" name="pnlSettingsInput" language="CPP" />
 					<wxPanel wxs="wxsmith/pnlSettingsOptions.wxs" src="pnlSettingsOptions.cpp" hdr="pnlSettingsOptions.h" fwddecl="0" i18n="1" name="pnlSettingsOptions" language="CPP" />
 					<wxPanel wxs="wxsmith/pnlTests.wxs" src="pnlTests.cpp" hdr="pnlTests.h" fwddecl="0" i18n="1" name="pnlTests" language="CPP" />
 					<wxPanel wxs="wxsmith/pnlAoIPInfo.wxs" src="pnlAoIPInfo.cpp" hdr="pnlAoIPInfo.h" fwddecl="0" i18n="1" name="pnlAoIPInfo" language="CPP" />
@@ -299,6 +335,9 @@
 					<wxPanel wxs="wxsmith/pnlSettingsGenerators.wxs" src="pnlSettingsGenerators.cpp" hdr="pnlSettingsGenerators.h" fwddecl="0" i18n="1" name="pnlSettingsGenerators" language="CPP" />
 					<wxDialog wxs="wxsmith/dlgAoIP.wxs" src="dlgAoIP.cpp" hdr="dlgAoIP.h" fwddecl="0" i18n="1" name="dlgAoIP" language="CPP" />
 					<wxPanel wxs="wxsmith/pnlSettingsNmos.wxs" src="pnlSettingsNmos.cpp" hdr="pnlSettingsNmos.h" fwddecl="0" i18n="1" name="pnlSettingsNmos" language="CPP" />
+					<wxPanel wxs="wxsmith/pnlUSB.wxs" src="pnlUSB.cpp" hdr="pnlUSB.h" fwddecl="0" i18n="1" name="pnlUSB" language="CPP" />
+					<wxPanel wxs="wxsmith/pnlAoIPSelection.wxs" src="pnlAoIPSelection.cpp" hdr="pnlAoIPSelection.h" fwddecl="0" i18n="1" name="pnlAoIPSelection" language="CPP" />
+					<wxDialog wxs="wxsmith/dlgEngineering.wxs" src="dlgEngineering.cpp" hdr="dlgEngineering.h" fwddecl="0" i18n="1" name="dlgEngineering" language="CPP" />
 				</resources>
 			</wxsmith>
 			<AutoVersioning>

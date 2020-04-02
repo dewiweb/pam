@@ -11,7 +11,7 @@
 //(*IdInit([CLASS_PREFIX]Panel)
 //*)
 
-wxIMPLEMENT_DYNAMIC_CAST([CLASS_PREFIX]Panel, pmPanel)
+wxIMPLEMENT_DYNAMIC_CLASS([CLASS_PREFIX]Panel, pmPanel)
 
 BEGIN_EVENT_TABLE([CLASS_PREFIX]Panel,pmPanel)
 	//(*EventTable([CLASS_PREFIX]Panel)
@@ -22,7 +22,7 @@ END_EVENT_TABLE()
 [CLASS_PREFIX]Panel::[CLASS_PREFIX]Panel(wxWindow* parent,[CLASS_PREFIX]Builder* pBuilder, wxWindowID id,const wxPoint& pos,const wxSize& size) : pmPanel(),
     m_pBuilder(pBuilder)
 {
-	//(*Initialize(pnlTest)
+	//(*Initialize([CLASS_PREFIX]Panel)
 	Create(parent, id, wxDefaultPosition, wxDefaultSize, wxTAB_TRAVERSAL, _T("id"));
 	//*)
 	

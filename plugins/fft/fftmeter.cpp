@@ -52,7 +52,9 @@ FftMeter::FftMeter(wxWindow *parent, FFTBuilder* pBuilder, wxWindowID id, const 
     m_nSampleRate = 48000;
 
     m_nNudge = NONE;
+    m_bColour = (pBuilder->ReadSetting(wxT("Colour"), 0)==1);
 
+    m_HeatMap.createDefaultHeatMapGradient();
 
     SetNumberOfBins(1024);
 }
@@ -122,7 +124,7 @@ void FftMeter::OnPaint(wxPaintEvent& event)
         uiLevel.SetRect(5, nDB-10, m_rectGrid.GetLeft()-5, 20);
         uiLevel.SetLabel(wxString::Format(wxT("%.0f"),(-i)));
         uiLevel.Draw(dc,uiRect::BORDER_NONE);
-        dc.SetPen(wxPen(wxColour(100,100,100),1, wxDOT));
+        dc.SetPen(wxPen(wxColour(100,100,100),1 ));
         dc.DrawLine(m_rectGrid.GetLeft(), nDB, m_rectGrid.GetWidth()+m_rectGrid.GetLeft(), nDB);
 
     }
@@ -205,8 +207,9 @@ void FftMeter::DrawThirds(wxDC& dc)
 void FftMeter::DrawFFT(wxDC& dc)
 {
     dc.SetTextForeground(GetForegroundColour());
-    wxPen penLine(wxColour(120,120,120),1,wxDOT);
+
     uiRect uiLabel;
+    wxPen penLine(wxColour(120,120,120),1);
     for(size_t i = 1; i < m_vfft_out.size()-1; i*= 2)
     {
         dc.SetPen(penLine);
@@ -236,7 +239,14 @@ void FftMeter::DrawFFT(wxDC& dc)
             y_old = min(y, m_rectGrid.GetBottom());
         }
 
-
+        if(m_bColour)
+        {
+            float r,g,b;
+            m_HeatMap.getColourAtValue(static_cast<float>(i)/static_cast<float>(m_vAmplitude.size()), r,g,b);
+            dc.SetPen(wxPen(wxColour( static_cast<unsigned char>(r*255.0),
+                                        static_cast<unsigned char>(g*255.0),
+                                      static_cast<unsigned char>(b*255.0))));
+        }
 
         switch(m_nDisplayType)
         {
@@ -269,7 +279,7 @@ void FftMeter::DrawFFT(wxDC& dc)
     if(m_bCursorMode)
     {
         int x = static_cast<int>( (static_cast<double>(m_rectGrid.GetWidth())/log(m_vAmplitude.size())) * static_cast<double>(log(m_nBinSelected)))+m_rectGrid.GetLeft();
-        dc.SetPen(wxPen(wxColour(255,100,00), 1, wxDOT));
+        dc.SetPen(wxPen(wxColour(255,100,00), 1));
         dc.DrawLine(x, m_rectGrid.GetTop(), x, m_rectGrid.GetBottom());
 
         m_uiClose.Draw(dc, wxT("Exit"), uiRect::BORDER_UP);
@@ -432,10 +442,10 @@ void FftMeter::Octave()
     //work out the third octave bands
     double dBins[3] = {3,4,5};
     int nBin(1);
-    int n = 0;
+    size_t n = 0;
     while(n < m_vThirdOctave.size())
     {
-        for(int i = 0; i < 3 && n<m_vThirdOctave.size(); i++)
+        for(size_t i = 0; i < 3 && n<m_vThirdOctave.size(); i++)
         {
             double dEnergy = 0.0;
             for(int j = 0; j < dBins[i]; j++)

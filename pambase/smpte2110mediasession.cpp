@@ -8,6 +8,8 @@
 #include "timedbuffer.h"
 #include <wx/log.h>
 #include <iostream>
+#include "wxptp.h"
+
 using namespace std;
 
 const wxString Smpte2110MediaSubsession::STR_SAMPLING[13] = { wxT("YCbCr-4:4:4"), wxT("YCbCr-4:2:2"), wxT("YCbCr-4:2:0"), wxT("CLYCbCr-4:4:4"), wxT("CLYCbCr-4:2:2"), wxT("CLYCbCr-4:2:0"), wxT("ICtCp-4:4:4"), wxT("ICtCp-4:2:2"), wxT("ICtCp-4:2:0"), wxT("RGB"), wxT("XYZ"), wxT("KEY"), wxT("Unknown")};
@@ -65,6 +67,8 @@ void Smpte2110MediaSession::initializeSMPTE_SDP(char const* sdpDescription)
         {
             break; // there are no m= lines at all
         }
+        cout << "Line: " << endl;
+        cout << sdpLine << endl;
 
         // Check for various special SMPTE 2110 and AES56 and Ravenna SDP lines that we understand:
         if (parseSDPAttribute_RefClk(sdpLine)) continue;
@@ -88,43 +92,48 @@ Boolean Smpte2110MediaSession::parseSDPAttribute_RefClk(char const* sdpLine)
     {
         size_t nEnd = sSdp.find(wxT("\n"), nFront);
         nEnd -= nFront;
-        wxString sLine = sSdp.substr(nFront+sFind.length(), (nEnd-sFind.length()));
-        m_refclk.sType = sLine.BeforeFirst(wxT('='));
+        if(nFront+sFind.length() < (nEnd-sFind.length()))
+        {
+            wxString sLine = sSdp.substr(nFront+sFind.length(), (nEnd-sFind.length()));
+            m_refclk.sType = sLine.BeforeFirst(wxT('='));
 
 
-        if(m_refclk.sType.CmpNoCase(wxT("ntp")) == 0)
-        {
-            m_refclk.sId = sLine.AfterFirst(wxT('='));
-        }
-        else if(m_refclk.sType.CmpNoCase(wxT("localmac")) == 0)
-        {
-            m_refclk.sId = sLine.AfterFirst(wxT('='));
-        }
-        else if(m_refclk.sType.CmpNoCase(wxT("ptp")) == 0)
-        {
-            wxString sDetails = sLine.AfterFirst(wxT('='));
-            if(sDetails.CmpNoCase(wxT("traceable")) == 0)
+            if(m_refclk.sType.CmpNoCase(wxT("ntp")) == 0)
             {
-                m_refclk.sId = sDetails;
+                m_refclk.sId = sLine.AfterFirst(wxT('='));
             }
-            else
+            else if(m_refclk.sType.CmpNoCase(wxT("localmac")) == 0)
             {
-                wxArrayString asDetails(wxStringTokenize(sDetails, wxT(":")));
-                if(asDetails.Count() >= 3)
+                m_refclk.sId = sLine.AfterFirst(wxT('='));
+            }
+            else if(m_refclk.sType.CmpNoCase(wxT("ptp")) == 0)
+            {
+                wxString sDetails = sLine.AfterFirst(wxT('='));
+                if(sDetails.CmpNoCase(wxT("traceable")) == 0)
                 {
-                    asDetails[2].ToULong(&m_refclk.nDomain);
+                    m_refclk.sId = sDetails;
                 }
-                if(asDetails.Count() >= 2)
+                else
                 {
-                    m_refclk.sId = asDetails[1];
-                }
-                if(asDetails.Count() >= 1)
-                {
-                    m_refclk.sVersion = asDetails[0];
+                    wxArrayString asDetails(wxStringTokenize(sDetails, wxT(":")));
+                    if(asDetails.Count() >= 3)
+                    {
+                        asDetails[2].ToULong(&m_refclk.nDomain);
+                    }
+                    if(asDetails.Count() >= 2)
+                    {
+                        m_refclk.sId = asDetails[1];
+                    }
+                    if(asDetails.Count() >= 1)
+                    {
+                        m_refclk.sVersion = asDetails[0];
+                    }
                 }
             }
         }
+        return True;
     }
+    return False;
 }
 
 
@@ -219,7 +228,7 @@ MediaSubsession* Smpte2110MediaSession::createNewMediaSubsession()
 }
 
 
-Smpte2110MediaSubsession::Smpte2110MediaSubsession(MediaSession& parent) : MediaSubsession(parent)
+Smpte2110MediaSubsession::Smpte2110MediaSubsession(MediaSession& parent) : MediaSubsession(parent), m_nSyncTime(0)
 {
 
 }
@@ -280,14 +289,18 @@ void Smpte2110MediaSubsession::parseSDPAttribute_Sync()
 
     wxString sFind(wxT("a=sync-time:"));
     size_t nFront = sSdp.find(sFind);
+    size_t nDante = sSdp.Find(wxT("Dante"));
+
+    m_nSyncTime = 0;
 
     if(nFront == wxNOT_FOUND)   //not found try the mediaclk:direct
     {
-        sFind = wxT("a=mediaclk:direct=");
+
+        sFind = wxT("a=mediaclk:direct");
         nFront = sSdp.find(sFind);
     }
 
-    if(nFront != wxNOT_FOUND)
+    if(nFront != wxNOT_FOUND && nDante == wxNOT_FOUND)
     {
         size_t nEnd = sSdp.find(wxT("\n"), nFront);
         nEnd -= nFront;
@@ -296,10 +309,7 @@ void Smpte2110MediaSubsession::parseSDPAttribute_Sync()
         //might possibly have clock rate after sync time. Ignore for now
         sTime.BeforeFirst(wxT(' ')).ToULong(&m_nSyncTime);
     }
-    else
-    {
-        m_nSyncTime = 0;
-    }
+
 }
 
 void Smpte2110MediaSubsession::parseSDPAttribute_Deviation()
@@ -337,6 +347,7 @@ const pairTime_t& Smpte2110MediaSubsession::GetLastEpoch()
     {
         return dynamic_cast<Aes67Source*>(rtpSource())->GetLastEpoch();
     }
+    return pairTime_t(0,0);
 }
 
 
@@ -651,7 +662,7 @@ void Smpte2110MediaSubsession::AnalyzeAttributes()
     env() << "Frame Rate: "   << (int)m_pairFrameRate.first << "/" << (int)m_pairFrameRate.second << "\n";
 
     str = wxString::FromAscii(attrVal_str("colorimetry"));
-    for(m_nColorimetry = 0; m_nColorimetry < 8; m_nColorimetry++)
+    for(m_nColorimetry = 0; m_nColorimetry < 7; m_nColorimetry++)
     {
         if(str.CmpNoCase(STR_COLORIMETRY[m_nColorimetry]) == 0)
             break;

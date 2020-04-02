@@ -8,7 +8,11 @@
 
 class PAMBASE_IMPEXPORT LevelMeter : public pmControl
 {
+    #ifdef WXSPAM
+    DECLARE_DYNAMIC_CLASS(LevelMeter)
+    #else
     wxDECLARE_DYNAMIC_CLASS(LevelMeter);
+    #endif // WXSPAM
     //DECLARE_EVENT_TABLE()
 public:
     LevelMeter();
@@ -61,7 +65,7 @@ protected:
     void ShowPPM(double dValue);
 
     uiRect m_uiSimple;
-    uiRect m_uiLevel[2];
+    uiRect m_uiLevel[3];
     uiRect m_uiBlack;
     uiRect m_uiPeak;
     std::vector<uiRect>	m_vLevelText;

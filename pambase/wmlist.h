@@ -17,7 +17,11 @@ class wmSlideWnd;
 **/
 class PAMBASE_IMPEXPORT wmList : public pmControl
 {
+    #ifdef WXSPAM
+    DECLARE_DYNAMIC_CLASS(wmList)
+    #else
     wxDECLARE_DYNAMIC_CLASS(wmList);
+    #endif // WXSPAM
     DECLARE_EVENT_TABLE()
 
    public:
@@ -53,7 +57,7 @@ class PAMBASE_IMPEXPORT wmList : public pmControl
         *   @param nColumns the number of columns in the list
         *   @param szGap the size of the gap between buttons and columns
         **/
-        virtual bool Create(wxWindow* pParent, wxWindowID id, const wxPoint& pos = wxDefaultPosition,
+        bool Create(wxWindow* pParent, wxWindowID id, const wxPoint& pos = wxDefaultPosition,
             const wxSize& size = wxDefaultSize, unsigned int nStyle=0, unsigned short nScroll = SCROLL_NONE, const wxSize& szButtons=wxSize(-1,40), unsigned int nColumns=1, const wxSize& szGap=wxSize(1,1));
 
         /** @brief Returns the best size for the control for wxSizer
@@ -679,7 +683,7 @@ class PAMBASE_IMPEXPORT wmList : public pmControl
 
         void CheckSliding(wxPoint pnt);
 
-        virtual void SetDefaultFactory();
+        void SetDefaultFactory();
 
         std::list<button*>::iterator GetButton(size_t nButton);
         std::list<button*>::iterator GetButton(void* pData);
@@ -740,7 +744,7 @@ class PAMBASE_IMPEXPORT wmList : public pmControl
         unsigned int m_nTextAlign;
         unsigned int m_nBitmapAlign;
 
-        wxBitmap m_bmpSwipe[2];
+        wxBitmap* m_pbmpSwipe[2];
         wxBitmap m_bmpSlide;
         int m_nSwipeLeft;
         std::set<std::list<button*>::iterator>::iterator m_itSwipe;
@@ -778,8 +782,14 @@ inline bool operator<(std::list<wmList::button*>::iterator it1, std::list<wmList
     return ((*it1)->pUi->GetIndex() < (*it2)->pUi->GetIndex());
 }
 
+#ifdef WXSPAM
+DECLARE_EXPORTED_EVENT_TYPE(WXEXPORT, wxEVT_LIST_SELECTED, -1)
+DECLARE_EXPORTED_EVENT_TYPE(WXEXPORT, wxEVT_LIST_HELD, -1)
+DECLARE_EXPORTED_EVENT_TYPE(WXEXPORT, wxEVT_LIST_PAGED, -1)
+DECLARE_EXPORTED_EVENT_TYPE(WXEXPORT, wxEVT_LIST_SLID, -1)
+#else
 wxDECLARE_EXPORTED_EVENT(PAMBASE_IMPEXPORT, wxEVT_LIST_SELECTED, wxCommandEvent);
 wxDECLARE_EXPORTED_EVENT(PAMBASE_IMPEXPORT, wxEVT_LIST_HELD, wxCommandEvent);
 wxDECLARE_EXPORTED_EVENT(PAMBASE_IMPEXPORT, wxEVT_LIST_PAGED, wxCommandEvent);
 wxDECLARE_EXPORTED_EVENT(PAMBASE_IMPEXPORT, wxEVT_LIST_SLID, wxCommandEvent);
-
+#endif // WXSPAM

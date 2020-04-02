@@ -20,16 +20,42 @@ BEGIN_EVENT_TABLE(wmButton, pmControl)
     EVT_TIMER(ID_TIMER_FLASH, wmButton::OnFlash)
 END_EVENT_TABLE()
 
- wxIMPLEMENT_DYNAMIC_CLASS(wmButton, pmControl);
+#ifdef WXSPAM
+IMPLEMENT_DYNAMIC_CLASS(wmButton, pmControl)
+#else
+wxIMPLEMENT_DYNAMIC_CLASS(wmButton, pmControl);
+#endif // WXSPAM
 
 DEFINE_EVENT_TYPE(wxEVT_BUTTON_PRESSED)
 DEFINE_EVENT_TYPE(wxEVT_BUTTON_RELEASED)
 DEFINE_EVENT_TYPE(wxEVT_BUTTON_HELD)
 
 
-
+wmButton::wmButton() : pmControl()
+	, m_nStyle(0)
+	, m_nHoldCount(0)
+	, m_nHoldTrigger(0)
+	, m_bFlashState(false)
+	, m_nBorderState(0)
+	, m_nState(0)
+	, m_bChecked(false)
+	, m_nBitmapAlign(0)
+	, m_bToggleLook(false)
+	, m_dToggleWidth(0.0)
+	{
+	}
 
 wmButton::wmButton(wxWindow *parent, wxWindowID id, const wxString& sLabel, const wxPoint& pos, const wxSize& size, long nStyle,const wxValidator& validator, const wxString& name) : pmControl()
+	, m_nStyle(0)
+	, m_nHoldCount(0)
+	, m_nHoldTrigger(0)
+	, m_bFlashState(false)
+	, m_nBorderState(0)
+	, m_nState(0)
+	, m_bChecked(false)
+	, m_nBitmapAlign(0)
+	, m_bToggleLook(false)
+	, m_dToggleWidth(0.0)
 {
     Create(parent, id, sLabel, pos, size, nStyle, validator, name);
 }

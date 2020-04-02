@@ -9,13 +9,16 @@
 class PAMBASE_IMPEXPORT wmSlider : public pmControl
 {
     DECLARE_EVENT_TABLE()
+    #ifdef WXSPAM
+    DECLARE_DYNAMIC_CLASS(wmSlider)
+    #else
     wxDECLARE_DYNAMIC_CLASS(wmSlider);
-
+    #endif // WXSPAM
     public:
 
         /** @brief default constructor
         **/
-        wmSlider() : pmControl() { }
+        wmSlider();
 
         /** @brief Constructor - made to be the same as a wxStaticText
         *   @param parent pointer to the parent window
@@ -63,12 +66,12 @@ class PAMBASE_IMPEXPORT wmSlider : public pmControl
         /** Called when the console resizes
         *   @param event
         **/
-        virtual void OnSize(wxSizeEvent& event);
+        void OnSize(wxSizeEvent& event);
 
         void OnFlash(wxTimerEvent& event);
 
-        virtual void CreateRects();
-        virtual void Draw(wxDC& dc);
+        void CreateRects();
+        void Draw(wxDC& dc);
 
         void OnLeftDown(wxMouseEvent& event);
         void OnLeftUp(wxMouseEvent& event);
@@ -88,4 +91,8 @@ class PAMBASE_IMPEXPORT wmSlider : public pmControl
         double m_dPosition;
 };
 
+#ifdef WXSPAM
+DECLARE_EXPORTED_EVENT_TYPE(WXEXPORT, wxEVT_SLIDER_MOVE, -1)
+#else
 wxDECLARE_EXPORTED_EVENT(PAMBASE_IMPEXPORT, wxEVT_SLIDER_MOVE,wxCommandEvent);
+#endif

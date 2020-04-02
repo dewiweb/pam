@@ -3,10 +3,9 @@
 #include "aes67source.h"
 #include <string>
 #include <cmath>
-#include <cmath>
 #include <wx/datetime.h>
 #include <wx/log.h>
-
+#include "wxptp.h"
 
 Aes67Source*
 Aes67Source::createNew(UsageEnvironment& env,
@@ -30,9 +29,13 @@ Aes67Source
 		  unsigned offset, Boolean doNormalMBitRule,
 		  unsigned int nSync)
   : SimpleRTPSource(env, RTPgs, rtpPayloadFormat, rtpTimestampFrequency, mimeTypeString,offset, doNormalMBitRule),
+  m_bEpochWorkedOut(false),
   m_nTimestampFrequency(rtpTimestampFrequency),
   m_nSyncTimestamp(nSync)
   {
+      #ifdef PTPMONKEY
+      wxPtp::Get().ResyncToMaster(0);
+      #endif // PTPMONKEY
       WorkoutLastEpoch();
   }
 
@@ -44,8 +47,22 @@ void Aes67Source::WorkoutLastEpoch()
 
     //get the current time
     timeval tvNow;
-    gettimeofday(&tvNow, 0);
+    #ifdef PTPMONKEY
 
+    if(wxPtp::Get().IsSyncedToMaster(0))
+    {
+        tvNow = wxPtp::Get().GetPtpTime(0); //need to set the domain
+        m_bEpochWorkedOut = true;
+    }
+    else
+    {
+
+        gettimeofday(&tvNow, nullptr);
+    }
+    #else
+    gettimeofday(&tvNow, nullptr);
+    m_bEpochWorkedOut = true;
+    #endif // PTPMONKEY
 
     double dNow = static_cast<double>(tvNow.tv_sec);//*1000000.0;
     dNow += static_cast<double>(tvNow.tv_usec) / 1000000.0;
@@ -72,6 +89,10 @@ pairTime_t Aes67Source::GetTransmissionTime()
 
     double dSeconds = static_cast<double>(fCurPacketRTPTimestamp)/static_cast<double>(m_nTimestampFrequency);
 
+    if(!m_bEpochWorkedOut)
+    {
+        WorkoutLastEpoch();
+    }
     pairTime_t tvTransmision;
     tvTransmision.first = m_tvLastEpoch.first;
     tvTransmision.second = m_tvLastEpoch.second;
@@ -86,6 +107,7 @@ pairTime_t Aes67Source::GetTransmissionTime()
         tvTransmision.second -= 1000000.0;
         tvTransmision.first ++;
     }
+
 
     return tvTransmision;
 }
